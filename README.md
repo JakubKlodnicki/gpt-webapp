@@ -12,5 +12,6 @@
 - Add a function to automatically clear the user's input field and add an animation while the AI generates a response.
 - Improve the application's styles. - Add a function to automatically clear the selected file in the input file button after sending.
 - Add custom GPT models.
+- Add a function for selecting languages ​​other than Polish
 - **POSSIBLY** add an admin panel.
 - **POSSIBLY** implement a group chat feature.
