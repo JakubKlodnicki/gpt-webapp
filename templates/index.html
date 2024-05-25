@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chat with GPT</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css') }}"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.3.1/styles/default.min.css"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.3.1/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="container">
+      <div class="sidebar">
+        <h2>Chats</h2>
+        <ul id="chat-list">
+          {% for chat in chats %}
+          <li>
+            <a href="/chat/{{ chat.id }}"
+              >{{ chat.title or 'Untitled Chat' }}</a
+            >
+            <form
+              action="/delete_chat/{{ chat.id }}"
+              method="POST"
+              style="display: inline"
+            >
+              <button type="submit">🗑️</button>
+            </form>
+          </li>
+          {% endfor %}
+        </ul>
+        <button id="new-chat-button">New Chat</button>
+      </div>
+      <div class="chat-container">
+        <div id="chat-history" class="chat-history">
+          {% if messages %} {% for message in messages %}
+          <div class="chat-message {{ message.role }}">
+            <div class="avatar"></div>
+            <div class="content">{{ message.content | safe }}</div>
+          </div>
+          {% endfor %} {% else %}
+          <div class="system-message">No active chat. Start a new chat.</div>
+          {% endif %}
+        </div>
+        <form id="chat-form" class="input-form">
+          <input
+            type="hidden"
+            id="chat_id"
+            name="chat_id"
+            value="{% if chat %}{{ chat.id }}{% endif %}"
+          />
+          <select
+            id="gpt_version"
+            name="gpt_version"
+            class="select-model"
+            data-message-sent="false"
+            {%
+            if
+            not
+            chat
+            %}disabled{%
+            endif
+            %}
+          >
+            <option value="gpt-3.5-turbo">GPT-3.5</option>
+            <option value="gpt-4-turbo">GPT-4</option>
+            <option value="gpt-4o">GPT-4o</option>
+          </select>
+          <input
+            type="text"
+            id="user_input"
+            name="user_input"
+            placeholder="Type your message here..."
+            required
+            class="input-box"
+            {%
+            if
+            not
+            chat
+            %}disabled{%
+            endif
+            %}
+          />
+          <button
+            type="submit"
+            class="send-button"
+            {%
+            if
+            not
+            chat
+            %}disabled{%
+            endif
+            %}
+          >
+            Send
+          </button>
+        </form>
+        <form
+          id="upload-form"
+          class="upload-form"
+          enctype="multipart/form-data"
+          {%
+          if
+          not
+          chat
+          %}disabled{%
+          endif
+          %}
+        >
+          <input
+            type="file"
+            id="file"
+            name="file"
+            required
+            class="file-input"
+            {%
+            if
+            not
+            chat
+            %}disabled{%
+            endif
+            %}
+          />
+          <button
+            type="submit"
+            class="upload-button"
+            {%
+            if
+            not
+            chat
+            %}disabled{%
+            endif
+            %}
+          >
+            Upload
+          </button>
+        </form>
+        <button
+          id="generate-image-button"
+          class="generate-image-button"
+          {%
+          if
+          not
+          chat
+          %}disabled{%
+          endif
+          %}
+        >
+          Generate Image
+        </button>
+      </div>
+    </div>
+
+    <!-- The Modal -->
+    <div id="imageModal" class="modal">
+      <div class="modal-content">
+        <span class="close">&times;</span>
+        <p>What image would you like to generate?</p>
+        <input
+          type="text"
+          id="imagePrompt"
+          placeholder="Enter image description"
+        />
+        <button id="generateImageButton">Generate</button>
+      </div>
+    </div>
+
+    <script>
+      function escapeHTML(html) {
+        const div = document.createElement("div");
+        div.textContent = html;
+        return div.innerHTML;
+      }
+
+      function appendMessage(role, content) {
+        const chatHistory = document.getElementById("chat-history");
+        const msgElement = document.createElement("div");
+        msgElement.className = `chat-message ${role}`;
+
+        const avatarElement = document.createElement("div");
+        avatarElement.className = "avatar";
+
+        const contentElement = document.createElement("div");
+        contentElement.className = "content";
+
+        if (role === "assistant" && content.startsWith("<img")) {
+          contentElement.innerHTML = content;
+        } else {
+          const escapedContent = escapeHTML(content);
+          const formattedContent = escapedContent.replace(
+            /```([\s\S]*?)```/g,
+            function (match, p1) {
+              return `<pre><code class="hljs">${p1}</code></pre>`;
+            }
+          );
+          contentElement.innerHTML = formattedContent;
+        }
+
+        msgElement.appendChild(avatarElement);
+        msgElement.appendChild(contentElement);
+        chatHistory.appendChild(msgElement);
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+
+        document.querySelectorAll("pre code").forEach((block) => {
+          hljs.highlightElement(block);
+        });
+      }
+
+      document
+        .getElementById("chat-form")
+        .addEventListener("submit", function (event) {
+          event.preventDefault();
+          const userInput = document.getElementById("user_input").value;
+          const gptVersion = document.getElementById("gpt_version").value;
+          const chatId =
+            document.getElementById("chat_id").value ||
+            sessionStorage.getItem("active_chat_id");
+
+          if (!chatId) {
+            alert("Please start a new chat session first.");
+            return;
+          }
+
+          fetch(`/chat/${chatId}`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              user_input: userInput,
+              gpt_version: gptVersion,
+            }),
+          })
+            .then((response) => {
+              if (!response.ok) {
+                throw new Error("Network response was not ok");
+              }
+              return response.json();
+            })
+            .then((data) => {
+              const chatHistory = document.getElementById("chat-history");
+              chatHistory.innerHTML = "";
+              data.chat_history.forEach((msg) => {
+                appendMessage(msg.role, msg.content);
+              });
+              document.getElementById("user_input").value = "";
+              document.getElementById("chat_id").value =
+                data.new_chat_id || chatId;
+              sessionStorage.setItem(
+                "active_chat_id",
+                data.new_chat_id || chatId
+              );
+
+              if (
+                document
+                  .getElementById("gpt_version")
+                  .getAttribute("data-message-sent") === "false"
+              ) {
+                document
+                  .getElementById("gpt_version")
+                  .setAttribute("data-message-sent", "true");
+                document.getElementById("gpt_version").style.display = "none";
+                const gptVersionDisplay = document.createElement("div");
+                gptVersionDisplay.id = "gpt_version_display";
+                gptVersionDisplay.innerText = `GPT Version: ${gptVersion}`;
+                document
+                  .getElementById("chat-form")
+                  .insertBefore(
+                    gptVersionDisplay,
+                    document.getElementById("user_input")
+                  );
+              }
+            })
+            .catch((error) => {
+              console.error("Error in fetch:", error);
+            });
+        });
+
+      document
+        .getElementById("upload-form")
+        .addEventListener("submit", function (event) {
+          event.preventDefault();
+          const formData = new FormData();
+          const fileField = document.getElementById("file");
+
+          formData.append("file", fileField.files[0]);
+
+          fetch("/upload", {
+            method: "POST",
+            body: formData,
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              if (data.error) {
+                appendMessage("assistant", `Error: ${data.error}`);
+              } else {
+                appendMessage("assistant", data.analysis);
+              }
+            })
+            .catch((error) => {
+              console.error("Error uploading file:", error);
+              appendMessage("assistant", "Error uploading file.");
+            });
+        });
+
+      document
+        .getElementById("new-chat-button")
+        .addEventListener("click", function (event) {
+          fetch("/new_chat", {
+            method: "POST",
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              document.getElementById("chat-history").innerHTML = "";
+              document.getElementById("chat_id").value = data.new_chat_id;
+              sessionStorage.setItem("active_chat_id", data.new_chat_id);
+              const newChatLink = document.createElement("li");
+              newChatLink.innerHTML = `<a href="/chat/${data.new_chat_id}">New Chat</a>
+                                    <form class="delete-chat-form" data-chat-id="${data.new_chat_id}" method="POST" style="display:inline;">
+                                        <button type="submit">🗑️</button>
+                                    </form>`;
+              document.querySelector("#chat-list").appendChild(newChatLink);
+              enableChatInputs();
+              document
+                .getElementById("gpt_version")
+                .setAttribute("data-message-sent", "false");
+              document.getElementById("gpt_version").style.display = "block";
+              const gptVersionDisplay = document.getElementById(
+                "gpt_version_display"
+              );
+              if (gptVersionDisplay) {
+                gptVersionDisplay.remove();
+              }
+            })
+            .catch((error) => {
+              console.error("Error in fetch:", error);
+            });
+        });
+
+      document
+        .getElementById("generate-image-button")
+        .addEventListener("click", function () {
+          document.getElementById("imageModal").style.display = "block";
+        });
+
+      document.querySelector(".close").addEventListener("click", function () {
+        document.getElementById("imageModal").style.display = "none";
+      });
+
+      document
+        .getElementById("generateImageButton")
+        .addEventListener("click", function () {
+          const imagePrompt = document.getElementById("imagePrompt").value;
+          const chatId =
+            document.getElementById("chat_id").value ||
+            sessionStorage.getItem("active_chat_id");
+
+          if (!chatId) {
+            alert("Please start a new chat session first.");
+            return;
+          }
+
+          fetch(`/generate_image`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              prompt: imagePrompt,
+              chat_id: chatId,
+            }),
+          })
+            .then((response) => {
+              if (!response.ok) {
+                throw new Error("Network response was not ok");
+              }
+              return response.json();
+            })
+            .then((data) => {
+              if (data.error) {
+                appendMessage("assistant", `Error: ${data.error}`);
+              } else {
+                appendMessage(
+                  "assistant",
+                  `<img src="${data.image_url}" alt="Generated Image">`
+                );
+              }
+              document.getElementById("imageModal").style.display = "none";
+              document.getElementById("imagePrompt").value = "";
+            })
+            .catch((error) => {
+              console.error("Error in fetch:", error);
+            });
+        });
+
+      function disableChatInputs() {
+        document.getElementById("user_input").disabled = true;
+        document.getElementById("gpt_version").disabled = true;
+        document.querySelector(".send-button").disabled = true;
+        document.querySelector(".file-input").disabled = true;
+        document.querySelector(".upload-button").disabled = true;
+        document.getElementById("generate-image-button").disabled = true;
+      }
+
+      function enableChatInputs() {
+        document.getElementById("user_input").disabled = false;
+        document.getElementById("gpt_version").disabled = false;
+        document.querySelector(".send-button").disabled = false;
+        document.querySelector(".file-input").disabled = false;
+        document.querySelector(".upload-button").disabled = false;
+        document.getElementById("generate-image-button").disabled = false;
+      }
+
+      if (!sessionStorage.getItem("active_chat_id")) {
+        disableChatInputs();
+      }
+    </script>
+  </body>
+</html>

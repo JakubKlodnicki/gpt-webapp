@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chat with GPT</title>
+    <style>
+      .modal {
+        display: none;
+        position: fixed;
+        z-index: 1;
+        padding-top: 100px;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgb(0, 0, 0);
+        background-color: rgba(0, 0, 0, 0.4);
+      }
+
+      .modal-content {
+        background-color: #fefefe;
+        margin: auto;
+        padding: 20px;
+        border: 1px solid #888;
+        width: 80%;
+      }
+
+      .close {
+        color: #aaa;
+        float: right;
+        font-size: 28px;
+        font-weight: bold;
+      }
+
+      .close:hover,
+      .close:focus {
+        color: black;
+        text-decoration: none;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="chat-container">
+      <div id="chat-history"></div>
+      <form id="chat-form">
+        <select id="gpt_version" name="gpt_version">
+          <option value="gpt-3.5-turbo">GPT-3.5</option>
+          <option value="gpt-4">GPT-4</option>
+          <option value="gpt-4o">GPT-4o</option>
+          <option value="dall-e">DALL-E</option>
+        </select>
+        <input
+          type="text"
+          id="user_input"
+          name="user_input"
+          placeholder="Type your message here..."
+          required
+        />
+        <button type="submit">Send</button>
+      </form>
+      <form id="upload-form" enctype="multipart/form-data">
+        <input type="file" id="file" name="file" required />
+        <button type="submit">Upload</button>
+      </form>
+    </div>
+
+    <div id="imageModal" class="modal">
+      <div class="modal-content">
+        <span class="close">&times;</span>
+        <p>What image would you like to generate?</p>
+        <input
+          type="text"
+          id="imagePrompt"
+          placeholder="Enter image description"
+        />
+        <button id="generateImageButton">Generate</button>
+      </div>
+    </div>
+
+    <script>
+      function appendMessage(role, content) {
+        const chatHistory = document.getElementById("chat-history");
+        const msgElement = document.createElement("div");
+        msgElement.className = `chat-message ${role}`;
+
+        if (role === "assistant" && content.startsWith("<img")) {
+          msgElement.innerHTML = content;
+        } else {
+          msgElement.textContent = `${role}: ${content}`;
+        }
+
+        chatHistory.appendChild(msgElement);
+      }
+
+      document
+        .getElementById("chat-form")
+        .addEventListener("submit", function (event) {
+          event.preventDefault();
+          const userInput = document.getElementById("user_input").value;
+          const gptVersion = document.getElementById("gpt_version").value;
+          console.log(
+            "Sending user input:",
+            userInput,
+            "with model:",
+            gptVersion
+          );
+          fetch("/chat", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              user_input: userInput,
+              gpt_version: gptVersion,
+            }),
+          })
+            .then((response) => {
+              console.log("Response status:", response.status);
+              if (!response.ok) {
+                throw new Error("Network response was not ok");
+              }
+              return response.json();
+            })
+            .then((data) => {
+              console.log("Chat response data:", data);
+              const chatHistory = document.getElementById("chat-history");
+              chatHistory.innerHTML = "";
+              data.chat_history.forEach((msg) => {
+                appendMessage(msg.role, msg.content);
+              });
+              document.getElementById("user_input").value = "";
+            })
+            .catch((error) => {
+              console.error("Error in fetch:", error);
+            });
+        });
+
+      document
+        .getElementById("upload-form")
+        .addEventListener("submit", function (event) {
+          event.preventDefault();
+          const formData = new FormData();
+          const fileField = document.getElementById("file");
+
+          formData.append("file", fileField.files[0]);
+
+          fetch("/upload", {
+            method: "POST",
+            body: formData,
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              console.log("File upload response:", data);
+              if (data.error) {
+                appendMessage("assistant", `Error: ${data.error}`);
+              } else {
+                appendMessage("assistant", data.analysis);
+              }
+            })
+            .catch((error) => {
+              console.error("Error uploading file:", error);
+              appendMessage("assistant", "Error uploading file.");
+            });
+        });
+
+      document
+        .getElementById("generateImageButton")
+        .addEventListener("click", function () {
+          const imagePrompt = document.getElementById("imagePrompt").value;
+          const chatId =
+            document.getElementById("chat_id").value ||
+            sessionStorage.getItem("active_chat_id");
+
+          if (!chatId) {
+            alert("Please start a new chat session first.");
+            return;
+          }
+
+          fetch(`/generate_image`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              prompt: imagePrompt,
+              chat_id: chatId,
+            }),
+          })
+            .then((response) => {
+              if (!response.ok) {
+                throw new Error("Network response was not ok");
+              }
+              return response.json();
+            })
+            .then((data) => {
+              if (data.error) {
+                appendMessage("assistant", `Error: ${data.error}`);
+              } else {
+                appendMessage(
+                  "assistant",
+                  `<img src="${data.image_url}" alt="Generated Image">`
+                );
+              }
+              document.getElementById("imageModal").style.display = "none";
+            })
+            .catch((error) => {
+              console.error("Error in fetch:", error);
+            });
+        });
+
+      document.querySelector(".close").addEventListener("click", function () {
+        document.getElementById("imageModal").style.display = "none";
+      });
+
+      document
+        .getElementById("generate-image-button")
+        .addEventListener("click", function () {
+          document.getElementById("imageModal").style.display = "block";
+        });
+    </script>
+  </body>
+</html>
