@@ -1,26 +1,26 @@
-/* style.css */
 body {
   font-family: "Arial", sans-serif;
-  background-color: #f0f2f5;
+  background-color: #121212;
   display: flex;
   justify-content: center;
   align-items: center;
   height: 100vh;
   margin: 0;
+  color: #e0e0e0;
 }
 
 .login-container {
-  background-color: #ffffff;
+  background-color: #1e1e1e;
   padding: 20px;
   border-radius: 10px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
   width: 300px;
   text-align: center;
 }
 
 h2 {
   margin-bottom: 20px;
-  color: #333333;
+  color: #e0e0e0;
 }
 
 .form-group {
@@ -31,21 +31,24 @@ h2 {
 .form-group label {
   display: block;
   margin-bottom: 5px;
-  color: #555555;
+  color: #bbbbbb;
 }
 
 .form-group input {
   width: 100%;
   padding: 10px;
-  border: 1px solid #cccccc;
+  border: 1px solid #444444;
   border-radius: 5px;
   box-sizing: border-box;
+  background-color: #2a2a2a;
+  color: #e0e0e0;
 }
 
 button {
   width: 100%;
   padding: 10px;
-  background-color: #007bff;
+  margin-top: 5px;
+  background-color: #007b55;
   border: none;
   border-radius: 5px;
   color: #ffffff;
@@ -54,5 +57,9 @@ button {
 }
 
 button:hover {
-  background-color: #0056b3;
+  background-color: #005b40;
+}
+
+::placeholder {
+  color: #888888;
 }
