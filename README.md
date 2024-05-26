@@ -13,5 +13,6 @@
 - Improve the application's styles. - Add a function to automatically clear the selected file in the input file button after sending.
 - Add custom GPT models.
 - Add a function for selecting languages ​​other than Polish
+- **FIX BUG** Can`t go to history chat before create new chat
 - **POSSIBLY** add an admin panel.
 - **POSSIBLY** implement a group chat feature.
